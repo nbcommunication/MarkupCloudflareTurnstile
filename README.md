@@ -26,6 +26,17 @@ You must create an API key pair (Site Key and Secret Key) to use this module. Go
 
 There are various configuration options listed here: https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/
 
+You can implement these by passing an array of attributes to the first argument of `render()`:
+
+```php
+echo $captcha->render([
+    'class' => 'cf-turnstile your-custom-class', // or 'cf-turnstile-explicit'
+    'data-theme' => 'dark',
+    'data-size' => 'compact',
+    'data-language' => 'de',
+]);
+```
+
 ### Server-side verification
 To verify the CAPTCHA response on the server side, call verifyResponse(), eg:
 
