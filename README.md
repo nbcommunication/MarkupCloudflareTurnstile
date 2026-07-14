@@ -4,7 +4,7 @@ This module allows you to add Cloudflare's Turnstile CAPTCHA to your website, pr
 ## Requirements
 * ProcessWire >= 3
 * PHP >= 8.1
-* The website must by added as a website in a Cloudflare account
+* The website must be added as a site in your Cloudflare account
 
 ## Useful documentation
 * [Client-side rendering](https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/)
@@ -50,3 +50,13 @@ if($captcha->verifyResponse() === true) {
 
 ## Console errors
 Implementation of this module may generate console errors, probably due to this: https://developers.cloudflare.com/turnstile/troubleshooting/troubleshooting-faqs/#i-am-seeing-a-401-error-in-your-console-during-a-turnstile-security-check-is-this-a-problem. These can be safely ignored.
+
+## Changelog
+
+### 0.0.4
+* Fixed potential attribute-injection issue in `render()` by escaping attribute keys/values with `$sanitizer->entities()`.
+* Fixed malformed markup caused by duplicate spaces in rendered attributes.
+* Sanitized the `cf-turnstile-response` POST value in `verifyResponse()`.
+* Added the visitor's IP address (`remoteip`) to the server-side verification request for stronger validation.
+* `verifyResponse()` now logs a notice when the verification request itself fails (e.g. network error), rather than failing silently.
+* Added `async` to the Turnstile script tag in `getScript()`, matching Cloudflare's recommended snippet.

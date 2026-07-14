@@ -18,9 +18,10 @@ class MarkupCloudflareTurnstile extends WireData implements Module, Configurable
 	 * @return string
 	 *
 	 */
-	public function render($attrs = [], InputfieldForm $form = null) {
+	public function render($attrs = [], ?InputfieldForm $form = null) {
 
 		$modules = $this->wire('modules');
+		$sanitizer = $this->wire('sanitizer');
 
 		if($attrs instanceof InputfieldForm) {
 			$form = $attrs;
@@ -29,6 +30,7 @@ class MarkupCloudflareTurnstile extends WireData implements Module, Configurable
 
 		if(!is_array($attrs)) $attrs = [];
 
+		$recaptchaInferredAttrs = [];
 		if($modules->isInstalled('MarkupGoogleRecaptcha')) {
 			// Piggy back on MarkupGoogleRecaptcha settings
 			$markupGoogleRecaptcha = $modules->get('MarkupGoogleRecaptcha');
@@ -43,7 +45,7 @@ class MarkupCloudflareTurnstile extends WireData implements Module, Configurable
 			}
 		}
 
-		$attrs = array_merge($recaptchaInferredAttrs ?? [], $attrs, [
+		$attrs = array_merge($recaptchaInferredAttrs, $attrs, [
 			'data-sitekey' => $this->siteKey,
 		]);
 
@@ -55,10 +57,11 @@ class MarkupCloudflareTurnstile extends WireData implements Module, Configurable
 		foreach($attrs as $key => $value) {
 			if(is_array($value)) $value = implode(' ', $value);
 			if(is_object($value)) $value = (string) $value;
-			$attrsStr .= is_bool($value) ? " $key" : " $key=\"$value\"";
+			$key = $sanitizer->entities($key);
+			$attrsStr .= is_bool($value) ? " $key" : " $key=\"" . $sanitizer->entities($value) . "\"";
 		}
 
-		$out = "<div $attrsStr></div>";
+		$out = "<div{$attrsStr}></div>";
 
 		if($form) {
 			$form->add([
@@ -82,7 +85,7 @@ class MarkupCloudflareTurnstile extends WireData implements Module, Configurable
 	public function getScript(array $params = []) {
 		$url = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
 		if(count($params)) $url .= '?' . http_build_query($params);
-		return "<script src=\"$url\" defer></script>";
+		return "<script src=\"$url\" async defer></script>";
 	}
 
 	/**
@@ -93,18 +96,36 @@ class MarkupCloudflareTurnstile extends WireData implements Module, Configurable
 	 */
 	public function verifyResponse() {
 
-		$response = $this->wire('input')->post('cf-turnstile-response');
+		$input = $this->wire('input');
+		$sanitizer = $this->wire('sanitizer');
+
+		$response = $sanitizer->text((string) $input->post('cf-turnstile-response'));
 		if(!$response) return false;
 
-		return json_decode($this->wire(new WireHttp())->post(
+		$data = [
+			'secret' => $this->secretKey,
+			'response' => $response,
+		];
+
+		$remoteIp = $this->wire('session')->getIP();
+		if($remoteIp) $data['remoteip'] = $remoteIp;
+
+		$http = $this->wire(new WireHttp());
+		$result = $http->post(
 			'https://challenges.cloudflare.com/turnstile/v0/siteverify',
-			[
-				'secret' => $this->secretKey,
-				'response' => $response,
-			],
+			$data,
 			[
 				'use' => 'curl',
 			]
-		), true)['success'] ?? false;
+		);
+
+		if($result === false) {
+			$this->error('MarkupCloudflareTurnstile: ' . $http->getError(), Notice::logOnly);
+			return false;
+		}
+
+		$result = json_decode($result, true);
+
+		return is_array($result) && !empty($result['success']);
 	}
 }
